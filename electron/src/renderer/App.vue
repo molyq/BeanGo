@@ -4,7 +4,6 @@
       v-model:search="state.filters.search"
       @open-history="historyDialog.visible = true"
       @open-areas="areaDialog.visible = true"
-      @open-revenue="revenueDialog.visible = true"
       @open-settings="openSettings"
     />
 
@@ -75,9 +74,7 @@
                   :table="table"
                   :status-meta="STATUS_META"
                   :get-duration="getDuration"
-                  :calc-revenue="calcRevenue"
                   :format-time="formatTime"
-                  :format-money="formatMoney"
                   :format-start-time="formatStartTime"
                   :is-overtime="isTableOvertime"
                   :get-end-time="getEndTime"
@@ -125,14 +122,8 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="settingsDialog.visible" title="计费设置" width="420px">
+    <el-dialog v-model="settingsDialog.visible" title="设置" width="420px">
       <el-form label-width="110px">
-        <el-form-item label="每小时费率">
-          <el-input-number v-model="settingsDialog.hourlyRate" :min="0" />
-        </el-form-item>
-        <el-form-item label="货币符号">
-          <el-input v-model="settingsDialog.currency" maxlength="2" />
-        </el-form-item>
         <el-form-item label="自动开始计时">
           <el-input-number v-model="settingsDialog.autoStartDelay" :min="0" :max="60" />
           <span style="margin-left: 6px; color: var(--muted); font-size: 12px;">选豆中 X 分钟后自动开始计时（0=关闭）</span>
@@ -226,50 +217,11 @@
         <el-descriptions-item label="桌台">{{ endTableRef.name }}</el-descriptions-item>
         <el-descriptions-item label="编号">{{ endTableRef.sessionId || '—' }}</el-descriptions-item>
         <el-descriptions-item label="时长">{{ formatDuration(getDuration(endTableRef)) }}</el-descriptions-item>
-        <el-descriptions-item label="金额">{{ formatMoney(calcRevenue(getDuration(endTableRef))) }}</el-descriptions-item>
       </el-descriptions>
 
       <template #footer>
         <el-button @click="endDialog.visible = false">取消</el-button>
         <el-button type="primary" @click="confirmEndTiming">确认结束</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="revenueDialog.visible" title="营收统计" width="760px">
-      <el-row :gutter="12" style="margin-bottom: 12px">
-        <el-col :span="12">
-          <el-card shadow="never">今日营收：<strong>{{ formatMoney(todayRevenue) }}</strong></el-card>
-        </el-col>
-        <el-col :span="12">
-          <el-card shadow="never">累计营收：<strong>{{ formatMoney(totalRevenue) }}</strong></el-card>
-        </el-col>
-      </el-row>
-
-      <el-table :data="sortedRecords" height="320" empty-text="暂无结算记录">
-        <el-table-column label="类型" min-width="80">
-          <template #default="scope">
-            <el-tag v-if="scope.row.type === 'reserve_cancel'" type="warning" size="small">预约取消</el-tag>
-            <el-tag v-else type="success" size="small">计时</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="tableName" label="桌台" min-width="100" />
-        <el-table-column prop="sessionId" label="编号" min-width="110" />
-        <el-table-column label="时长" min-width="110">
-          <template #default="scope">{{ formatDuration(scope.row.duration) }}</template>
-        </el-table-column>
-        <el-table-column label="金额" min-width="100">
-          <template #default="scope">{{ scope.row.type === 'reserve_cancel' ? '—' : formatMoney(scope.row.revenue) }}</template>
-        </el-table-column>
-        <el-table-column label="时间" min-width="180">
-          <template #default="scope">
-            {{ new Date(scope.row.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }}
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <template #footer>
-        <el-button type="danger" plain @click="confirmClearRecords">清空记录</el-button>
-        <el-button @click="revenueDialog.visible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -281,7 +233,7 @@
             <div v-for="group in groupedTimingHistories" :key="group.date" class="history-day-group">
               <div class="history-day-head">
                 <strong>{{ group.date }}</strong>
-                <span>{{ group.items.length }} 条 · 合计 {{ formatMoney(group.total) }}</span>
+                <span>{{ group.items.length }} 条</span>
               </div>
               <el-table :data="group.items" size="small">
                 <el-table-column prop="tableCode" label="桌台" min-width="100" />
@@ -290,9 +242,6 @@
                 </el-table-column>
                 <el-table-column prop="duration" label="时长" min-width="120">
                   <template #default="scope">{{ formatDuration(scope.row.duration) }}</template>
-                </el-table-column>
-                <el-table-column prop="revenue" label="金额" min-width="120">
-                  <template #default="scope">{{ formatMoney(scope.row.revenue) }}</template>
                 </el-table-column>
                 <el-table-column prop="createdAt" label="时间" min-width="80">
                   <template #default="scope">{{ new Date(scope.row.createdAt).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</template>
@@ -432,16 +381,11 @@ const {
   areaCounts,
   availableTags,
   filteredTables,
-  sortedRecords,
   sortedHistories,
   timingHistories,
   reserveHistories,
-  todayRevenue,
-  totalRevenue,
   getDuration,
-  calcRevenue,
   formatDuration,
-  formatMoney,
   formatTime,
   formatStartTime,
   isTableOvertime,
@@ -462,15 +406,13 @@ const {
   addArea,
   deleteArea,
   saveSettings,
-  clearRecords,
 } = useAppStore();
 
 const addDialog = reactive({ visible: false, areaId: '', prefix: 'A', startNum: 1, count: 1, tag: '' });
-const settingsDialog = reactive({ visible: false, hourlyRate: 30, currency: '¥', autoStartDelay: 0 });
+const settingsDialog = reactive({ visible: false, autoStartDelay: 0 });
 const areaDialog = reactive({ visible: false, name: '', color: '#4f8df6' });
 const changeDialog = reactive({ visible: false, fromId: '', targetId: '' });
 const endDialog = reactive({ visible: false, tableId: '' });
-const revenueDialog = reactive({ visible: false });
 const historyDialog = reactive({ visible: false });
 const editTableDialog = reactive({ visible: false, table: null });
 const deleteDialog = reactive({ visible: false, selectedIds: [] });
@@ -493,7 +435,7 @@ function groupByDay(items) {
   return [...groups.entries()].map(([date, entries]) => ({
     date,
     items: entries,
-    total: entries.reduce((s, r) => s + (r.revenue || 0), 0),
+    total: entries.length,
   }));
 }
 
@@ -582,20 +524,11 @@ function confirmAdd() {
 
 function openSettings() {
   settingsDialog.visible = true;
-  settingsDialog.hourlyRate = state.settings.hourlyRate;
-  settingsDialog.currency = state.settings.currency;
   settingsDialog.autoStartDelay = state.settings.autoStartDelay || 0;
 }
 
 function confirmSettings() {
-  if (Number(settingsDialog.hourlyRate) < 0) {
-    ElMessage.warning('费率不能小于 0');
-    return;
-  }
-
   saveSettings({
-    hourlyRate: Number(settingsDialog.hourlyRate) || 0,
-    currency: settingsDialog.currency || '¥',
     autoStartDelay: Number(settingsDialog.autoStartDelay) || 0,
   });
 
@@ -744,13 +677,4 @@ async function confirmDeleteArea(area) {
   if (ok) deleteArea(area.id);
 }
 
-async function confirmClearRecords() {
-  const ok = await ElMessageBox.confirm('确认清空所有结算记录？', '清空记录', {
-    type: 'warning',
-    confirmButtonText: '清空',
-    cancelButtonText: '取消',
-  }).then(() => true).catch(() => false);
-
-  if (ok) clearRecords();
-}
 </script>

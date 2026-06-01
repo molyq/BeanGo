@@ -13,7 +13,7 @@ const STATUS_META = {
   overtime: { label: '已超时', tag: 'danger' },
 };
 
-const DEFAULT_SETTINGS = { key: 'main', hourlyRate: 30, currency: '¥', autoStartDelay: 0 };
+const DEFAULT_SETTINGS = { key: 'main', autoStartDelay: 0 };
 
 const uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
   const r = Math.random() * 16 | 0;
@@ -30,14 +30,6 @@ const normalizePrefix = (value) => {
   const first = raw.match(/[A-Z]/)?.[0];
   return first || 'A';
 };
-
-function isToday(ts) {
-  const now = new Date();
-  const d = new Date(ts);
-  return d.getFullYear() === now.getFullYear()
-    && d.getMonth() === now.getMonth()
-    && d.getDate() === now.getDate();
-}
 
 function parseCode(name) {
   const m = String(name || '').trim().toUpperCase().match(/^([A-Z])-?(\d+)$/);
@@ -123,8 +115,6 @@ export function useAppStore() {
       });
   });
 
-  const todayRevenue = computed(() => state.records.filter((r) => isToday(r.createdAt)).reduce((sum, r) => sum + (r.revenue || 0), 0));
-  const totalRevenue = computed(() => state.records.reduce((sum, r) => sum + (r.revenue || 0), 0));
   const sortedRecords = computed(() => [...state.records].sort((a, b) => b.createdAt - a.createdAt));
   const sortedHistories = computed(() => [...state.histories].sort((a, b) => b.createdAt - a.createdAt));
 const timingHistories = computed(() => sortedHistories.value.filter((h) => h.type === 'timing'));
@@ -134,10 +124,6 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     if (!table.timerStart) return 0;
     if (table.status === 'paused') return table.timerPausedTime || 0;
     return Math.max(0, now.value - table.timerStart - (table.totalPausedDuration || 0));
-  }
-
-  function calcRevenue(ms) {
-    return Math.max(0, (ms || 0) / 3600000 * (state.settings.hourlyRate || 0));
   }
 
   function formatTime(ms) {
@@ -154,10 +140,6 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
     return h > 0 ? `${h}小时${m}分钟` : `${m}分钟`;
-  }
-
-  function formatMoney(value) {
-    return `${state.settings.currency}${(value || 0).toFixed(2)}`;
   }
 
   function formatStartTime(timestamp) {
@@ -251,7 +233,6 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
   function cancelReserve(table) {
     const duration = getDuration(table);
 
-    // 生成预约取消记录
     const reserveRecord = {
       id: uuid(),
       tableId: table.id,
@@ -261,8 +242,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       startTime: table.timerStart || Date.now(),
       endTime: Date.now(),
       duration,
-      revenue: 0,
-      type: 'reserve_cancel',  // 预约取消记录
+      type: 'reserve_cancel',
       createdAt: Date.now(),
     };
 
@@ -271,15 +251,13 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       console.error('[put reserve cancel record error]', error);
     });
 
-    // 创建预约历史记录，可恢复
     const history = {
       id: uuid(),
       tableId: table.id,
       tableCode: table.name,
       createdAt: Date.now(),
       duration,
-      revenue: 0,
-      type: 'reserve',  // 预约记录类型
+      type: 'reserve',
       tableSnapshot: clone(table),
       recordId: reserveRecord.id,
       restoredAt: null,
@@ -335,7 +313,6 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
   function endTiming(table) {
     const endTime = Date.now();
     const duration = getDuration(table);
-    const revenue = calcRevenue(duration);
     const tableSnapshot = clone(table);
 
     const record = {
@@ -347,8 +324,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       startTime: table.timerStart || endTime,
       endTime,
       duration,
-      revenue,
-      type: 'timing',  // 计时记录
+      type: 'timing',
       createdAt: endTime,
     };
 
@@ -364,8 +340,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       tableCode: table.name,
       createdAt: endTime,
       duration,
-      revenue,
-      type: 'timing',  // 计时记录类型
+      type: 'timing',
       tableSnapshot,
       recordId: record.id,
       restoredAt: null,
@@ -377,7 +352,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
 
     resetTable(table);
     persistTable(table);
-    ElMessage.success(`已结束计时 ${formatMoney(revenue)}`);
+    ElMessage.success(`「${table.name}」已结束计时`);
   }
 
   function restoreFromHistory(history, { overwrite = false } = {}) {
@@ -692,13 +667,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     sortedHistories,
     timingHistories,
     reserveHistories,
-    todayRevenue,
-    totalRevenue,
     getDuration,
-    calcRevenue,
     formatTime,
     formatDuration,
-    formatMoney,
     formatStartTime,
     formatTableCode,
     isTableOvertime,

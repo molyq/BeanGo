@@ -34,11 +34,6 @@
       <strong>{{ formatStartTime(getEndTime(table)) }}</strong>
     </div>
 
-    <div class="table-card-meta">
-      <span>预计费用</span>
-      <strong>{{ running ? formatMoney(calcRevenue(getDuration(table))) : '—' }}</strong>
-    </div>
-
     <div v-if="isOvertime(table)" class="overtime-banner">
       <span>已超时 {{ formatTime(getDuration(table) - table.scheduledDuration) }}</span>
     </div>
@@ -128,9 +123,7 @@ const props = defineProps({
   table: { type: Object, required: true },
   statusMeta: { type: Object, required: true },
   getDuration: { type: Function, required: true },
-  calcRevenue: { type: Function, required: true },
   formatTime: { type: Function, required: true },
-  formatMoney: { type: Function, required: true },
   formatStartTime: { type: Function, required: true },
   getEndTime: { type: Function, required: true },
   isOvertime: { type: Function, required: true },
