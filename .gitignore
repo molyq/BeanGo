@@ -1,6 +1,9 @@
 # Dependencies
 electron/node_modules/
 
+# Data directory
+/data/
+
 # Build outputs
 electron/dist/
 electron/release/

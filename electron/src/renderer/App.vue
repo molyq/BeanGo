@@ -16,7 +16,7 @@
         :tags="availableTags"
         :status-meta="STATUS_META"
         :status-order="STATUS_ORDER"
-        @update:status="(value) => (state.filters.status = value)"
+        @update:status="(value) => { state.filters.status = value; state.filters.timeFilter = null; }"
         @update:tag="(value) => (state.filters.tag = value)"
         @open-add-table="openAddDialog"
         @open-edit-table="onOpenEdit"
@@ -37,6 +37,25 @@
           >
             {{ area.name }} ({{ areaCounts[area.id] || 0 }})
           </el-check-tag>
+        </div>
+
+        <div v-if="state.filters.status === 'all' || state.filters.status === 'in_use'" class="time-filter-bar">
+          <el-button
+            size="small"
+            :type="state.filters.timeFilter === 5 ? 'warning' : ''"
+            plain
+            @click="state.filters.timeFilter = state.filters.timeFilter === 5 ? null : 5"
+          >
+            5 分钟内结束
+          </el-button>
+          <el-button
+            size="small"
+            :type="state.filters.timeFilter === 10 ? 'warning' : ''"
+            plain
+            @click="state.filters.timeFilter = state.filters.timeFilter === 10 ? null : 10"
+          >
+            10 分钟内结束
+          </el-button>
         </div>
 
         <div v-loading="state.loading" class="table-content">
@@ -60,6 +79,8 @@
                   :format-time="formatTime"
                   :format-money="formatMoney"
                   :format-start-time="formatStartTime"
+                  :is-overtime="isTableOvertime"
+                  :get-end-time="getEndTime"
                   @open="openTable"
                   @reserve="reserveTable"
                   @cancel-reserve="cancelReserve"
@@ -68,6 +89,7 @@
                   @resume="resumeTable"
                   @settle="onEndTiming"
                   @change="onChange"
+                  @edit="onEditActive"
                 />
               </div>
             </section>
@@ -111,10 +133,35 @@
         <el-form-item label="货币符号">
           <el-input v-model="settingsDialog.currency" maxlength="2" />
         </el-form-item>
+        <el-form-item label="自动开始计时">
+          <el-input-number v-model="settingsDialog.autoStartDelay" :min="0" :max="60" />
+          <span style="margin-left: 6px; color: var(--muted); font-size: 12px;">选豆中 X 分钟后自动开始计时（0=关闭）</span>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="settingsDialog.visible = false">取消</el-button>
         <el-button type="primary" @click="confirmSettings">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="editActiveDialog.visible" title="编辑桌台" width="420px">
+      <el-form label-width="100px">
+        <el-form-item label="计划时长">
+          <div class="custom-duration">
+            <el-input-number v-model="editActiveDialog.customHours" :min="0" :max="99" size="small" />
+            <span class="custom-label">时</span>
+            <el-input-number v-model="editActiveDialog.customMinutes" :min="0" :max="59" size="small" />
+            <span class="custom-label">分</span>
+            <span style="font-size: 11px; color: var(--muted);">（都为 0 表示不限）</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="editActiveDialog.remark" placeholder="如：加收5元" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editActiveDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="confirmEditActive">保存</el-button>
       </template>
     </el-dialog>
 
@@ -229,52 +276,64 @@
     <el-dialog v-model="historyDialog.visible" title="历史记录" width="860px">
       <el-tabs>
         <el-tab-pane label="计时记录">
-          <el-table :data="timingHistories" height="360" empty-text="暂无计时记录">
-            <el-table-column prop="tableCode" label="桌台" min-width="100" />
-            <el-table-column label="编号" min-width="100">
-              <template #default="scope">{{ scope.row.tableSnapshot?.sessionId || '—' }}</template>
-            </el-table-column>
-            <el-table-column prop="duration" label="时长" min-width="120">
-              <template #default="scope">{{ formatDuration(scope.row.duration) }}</template>
-            </el-table-column>
-            <el-table-column prop="revenue" label="金额" min-width="120">
-              <template #default="scope">{{ formatMoney(scope.row.revenue) }}</template>
-            </el-table-column>
-            <el-table-column prop="createdAt" label="结束时间" min-width="180">
-              <template #default="scope">{{ new Date(scope.row.createdAt).toLocaleString('zh-CN') }}</template>
-            </el-table-column>
-            <el-table-column prop="restoredAt" label="状态" min-width="100">
-              <template #default="scope">{{ scope.row.restoredAt ? '已恢复' : '可恢复' }}</template>
-            </el-table-column>
-            <el-table-column label="操作" min-width="120" fixed="right">
-              <template #default="scope">
-                <el-button size="small" type="primary" plain :disabled="!!scope.row.restoredAt" @click="onRestoreHistory(scope.row)">恢复</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          <div v-if="!timingHistories.length" class="empty small-empty">暂无计时记录</div>
+          <div v-else class="history-day-list">
+            <div v-for="group in groupedTimingHistories" :key="group.date" class="history-day-group">
+              <div class="history-day-head">
+                <strong>{{ group.date }}</strong>
+                <span>{{ group.items.length }} 条 · 合计 {{ formatMoney(group.total) }}</span>
+              </div>
+              <el-table :data="group.items" size="small">
+                <el-table-column prop="tableCode" label="桌台" min-width="100" />
+                <el-table-column label="编号" min-width="100">
+                  <template #default="scope">{{ scope.row.tableSnapshot?.sessionId || '—' }}</template>
+                </el-table-column>
+                <el-table-column prop="duration" label="时长" min-width="120">
+                  <template #default="scope">{{ formatDuration(scope.row.duration) }}</template>
+                </el-table-column>
+                <el-table-column prop="revenue" label="金额" min-width="120">
+                  <template #default="scope">{{ formatMoney(scope.row.revenue) }}</template>
+                </el-table-column>
+                <el-table-column prop="createdAt" label="时间" min-width="80">
+                  <template #default="scope">{{ new Date(scope.row.createdAt).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</template>
+                </el-table-column>
+                <el-table-column label="操作" min-width="120" fixed="right">
+                  <template #default="scope">
+                    <el-button size="small" type="primary" plain :disabled="!!scope.row.restoredAt" @click="onRestoreHistory(scope.row)">恢复</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="预约记录">
-          <el-table :data="reserveHistories" height="360" empty-text="暂无预约记录">
-            <el-table-column prop="tableCode" label="桌台" min-width="100" />
-            <el-table-column label="编号" min-width="100">
-              <template #default="scope">{{ scope.row.tableSnapshot?.sessionId || '—' }}</template>
-            </el-table-column>
-            <el-table-column prop="duration" label="等待时长" min-width="120">
-              <template #default="scope">{{ formatDuration(scope.row.duration) }}</template>
-            </el-table-column>
-            <el-table-column prop="createdAt" label="取消时间" min-width="180">
-              <template #default="scope">{{ new Date(scope.row.createdAt).toLocaleString('zh-CN') }}</template>
-            </el-table-column>
-            <el-table-column prop="restoredAt" label="状态" min-width="100">
-              <template #default="scope">{{ scope.row.restoredAt ? '已恢复' : '可恢复' }}</template>
-            </el-table-column>
-            <el-table-column label="操作" min-width="120" fixed="right">
-              <template #default="scope">
-                <el-button size="small" type="primary" plain :disabled="!!scope.row.restoredAt" @click="onRestoreHistory(scope.row)">恢复</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          <div v-if="!reserveHistories.length" class="empty small-empty">暂无预约记录</div>
+          <div v-else class="history-day-list">
+            <div v-for="group in groupedReserveHistories" :key="group.date" class="history-day-group">
+              <div class="history-day-head">
+                <strong>{{ group.date }}</strong>
+                <span>{{ group.items.length }} 条</span>
+              </div>
+              <el-table :data="group.items" size="small">
+                <el-table-column prop="tableCode" label="桌台" min-width="100" />
+                <el-table-column label="编号" min-width="100">
+                  <template #default="scope">{{ scope.row.tableSnapshot?.sessionId || '—' }}</template>
+                </el-table-column>
+                <el-table-column prop="duration" label="等待时长" min-width="120">
+                  <template #default="scope">{{ formatDuration(scope.row.duration) }}</template>
+                </el-table-column>
+                <el-table-column prop="createdAt" label="时间" min-width="80">
+                  <template #default="scope">{{ new Date(scope.row.createdAt).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</template>
+                </el-table-column>
+                <el-table-column label="操作" min-width="120" fixed="right">
+                  <template #default="scope">
+                    <el-button size="small" type="primary" plain :disabled="!!scope.row.restoredAt" @click="onRestoreHistory(scope.row)">恢复</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
@@ -385,6 +444,8 @@ const {
   formatMoney,
   formatTime,
   formatStartTime,
+  isTableOvertime,
+  getEndTime,
   openTable,
   reserveTable,
   cancelReserve,
@@ -396,6 +457,7 @@ const {
   changeTable,
   deleteTable,
   editTable,
+  editActiveTable,
   addTables,
   addArea,
   deleteArea,
@@ -404,7 +466,7 @@ const {
 } = useAppStore();
 
 const addDialog = reactive({ visible: false, areaId: '', prefix: 'A', startNum: 1, count: 1, tag: '' });
-const settingsDialog = reactive({ visible: false, hourlyRate: 30, currency: '¥' });
+const settingsDialog = reactive({ visible: false, hourlyRate: 30, currency: '¥', autoStartDelay: 0 });
 const areaDialog = reactive({ visible: false, name: '', color: '#4f8df6' });
 const changeDialog = reactive({ visible: false, fromId: '', targetId: '' });
 const endDialog = reactive({ visible: false, tableId: '' });
@@ -412,6 +474,7 @@ const revenueDialog = reactive({ visible: false });
 const historyDialog = reactive({ visible: false });
 const editTableDialog = reactive({ visible: false, table: null });
 const deleteDialog = reactive({ visible: false, selectedIds: [] });
+const editActiveDialog = reactive({ visible: false, tableId: '', customHours: 0, customMinutes: 0, remark: '' });
 
 const changeTargets = computed(() => state.tables.filter((x) => x.id !== changeDialog.fromId));
 const currentTableName = computed(() => {
@@ -419,6 +482,23 @@ const currentTableName = computed(() => {
   return table ? `${table.name}${table.tag ? ' - ' + table.tag : ''}` : '';
 });
 const endTableRef = computed(() => state.tables.find((x) => x.id === endDialog.tableId) || null);
+
+function groupByDay(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = new Date(item.createdAt).toLocaleDateString('zh-CN');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.entries()].map(([date, entries]) => ({
+    date,
+    items: entries,
+    total: entries.reduce((s, r) => s + (r.revenue || 0), 0),
+  }));
+}
+
+const groupedTimingHistories = computed(() => groupByDay(timingHistories.value));
+const groupedReserveHistories = computed(() => groupByDay(reserveHistories.value));
 const areaMap = computed(() => {
   const map = Object.create(null);
   for (const area of state.areas) map[area.id] = area;
@@ -504,6 +584,7 @@ function openSettings() {
   settingsDialog.visible = true;
   settingsDialog.hourlyRate = state.settings.hourlyRate;
   settingsDialog.currency = state.settings.currency;
+  settingsDialog.autoStartDelay = state.settings.autoStartDelay || 0;
 }
 
 function confirmSettings() {
@@ -515,6 +596,7 @@ function confirmSettings() {
   saveSettings({
     hourlyRate: Number(settingsDialog.hourlyRate) || 0,
     currency: settingsDialog.currency || '¥',
+    autoStartDelay: Number(settingsDialog.autoStartDelay) || 0,
   });
 
   settingsDialog.visible = false;
@@ -562,6 +644,24 @@ function confirmEditTable() {
   editTable(id, { name, areaId, tag });
   editTableDialog.visible = false;
   editTableDialog.table = null;
+}
+
+function onEditActive(table) {
+  editActiveDialog.visible = true;
+  editActiveDialog.tableId = table.id;
+  const ms = table.scheduledDuration || 0;
+  editActiveDialog.customHours = Math.floor(ms / 3600000);
+  editActiveDialog.customMinutes = (ms / 60000) % 60;
+  editActiveDialog.remark = table.remark || '';
+}
+
+function confirmEditActive() {
+  const total = editActiveDialog.customHours * 60 + editActiveDialog.customMinutes;
+  editActiveTable(editActiveDialog.tableId, {
+    scheduledDuration: total > 0 ? total * 60 * 1000 : null,
+    remark: editActiveDialog.remark,
+  });
+  editActiveDialog.visible = false;
 }
 
 function onEndTiming(table) {

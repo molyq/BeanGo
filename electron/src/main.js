@@ -5,7 +5,7 @@ const fs = require('fs');
 // ============================================================
 // 数据存储路径
 // ============================================================
-const DATA_DIR = path.join(app.getPath('userData'), 'data');
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const DB_FILE  = path.join(DATA_DIR, 'db.json');
 
 function ensureDataDir() {
