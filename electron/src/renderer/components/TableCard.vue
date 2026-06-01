@@ -1,5 +1,5 @@
 <template>
-  <el-card class="table-card" :class="['status-' + table.status, { overtime: isOvertime }]" shadow="hover">
+  <el-card class="table-card" :class="['status-' + table.status, { overtime: isTableOvertime }]" shadow="hover">
     <div class="table-card-head">
       <div>
         <div class="table-card-title">{{ table.name }}</div>
@@ -143,8 +143,9 @@ const actualDuration = computed(() => {
   return localDuration.value;
 });
 
+const isTableOvertime = computed(() => props.isOvertime(props.table));
 const status = computed(() => {
-  if (props.isOvertime(props.table)) return { label: '超时!', tag: 'danger' };
+  if (isTableOvertime.value) return { label: '超时!', tag: 'danger' };
   return props.statusMeta[props.table.status] || { label: props.table.status, tag: 'info' };
 });
 const running = computed(() => props.table.status === 'in_use' || props.table.status === 'paused' || props.table.status === 'reserved');

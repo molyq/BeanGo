@@ -217,15 +217,81 @@ body {
 }
 
 .table-card {
-  border: 1px solid var(--border);
-  border-left: 4px solid #e0e0e0;
+  border: 2px solid var(--border);
+  transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s;
 }
 
-.table-card.status-idle    { border-left-color: #67c23a; }
-.table-card.status-reserved { border-left-color: #e6a23c; }
-.table-card.status-selecting { border-left-color: #f5a623; }
-.table-card.status-in_use  { border-left-color: #409eff; }
-.table-card.status-paused  { border-left-color: #e6a23c; }
+/* 空闲 — 灰色 */
+.table-card.status-idle {
+  border-color: #909399;
+  background: #f8f8f9;
+  animation: idle-pulse 1.8s ease-in-out infinite;
+}
+
+/* 已预约 — 橙色 */
+.table-card.status-reserved {
+  border-color: #e6a23c;
+  background: #fef8f0;
+  animation: reserved-pulse 1.2s ease-in-out infinite;
+}
+
+/* 选豆中 — 蓝色 */
+.table-card.status-selecting {
+  border-color: #409eff;
+  background: #f0f7ff;
+  animation: selecting-pulse 1.2s ease-in-out infinite;
+}
+
+/* 使用中 — 绿色 */
+.table-card.status-in_use {
+  border-color: #67c23a;
+  background: #f0faf4;
+  animation: inuse-pulse 1.8s ease-in-out infinite;
+}
+
+/* 暂停中 — 橙色 */
+.table-card.status-paused {
+  border-color: #e6a23c;
+  background: #fef8f0;
+  animation: paused-pulse 1.2s ease-in-out infinite;
+}
+
+/* 超时 — 红色 */
+.table-card.overtime {
+  border-color: #f56c6c !important;
+  background: rgba(255, 240, 240, 0.8) !important;
+  animation: overtime-pulse 1.2s ease-in-out infinite !important;
+}
+
+@keyframes idle-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(144, 147, 153, 0.25); }
+  50% { box-shadow: 0 0 12px 2px rgba(144, 147, 153, 0.18); }
+}
+
+@keyframes reserved-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 162, 60, 0.35); }
+  50% { box-shadow: 0 0 14px 3px rgba(230, 162, 60, 0.25); }
+}
+
+@keyframes selecting-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.35); }
+  50% { box-shadow: 0 0 14px 3px rgba(64, 158, 255, 0.25); }
+}
+
+@keyframes inuse-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.25); }
+  50% { box-shadow: 0 0 12px 2px rgba(103, 194, 58, 0.18); }
+}
+
+@keyframes paused-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 162, 60, 0.35); }
+  50% { box-shadow: 0 0 14px 3px rgba(230, 162, 60, 0.25); }
+}
+
+@keyframes overtime-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.4); }
+  50% { box-shadow: 0 0 16px 4px rgba(245, 108, 108, 0.3); }
+}
 
 .table-card-head {
   display: flex;
@@ -352,18 +418,6 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-/* 超时状态 */
-.table-card.overtime {
-  border: 2px solid #f56c6c !important;
-  animation: overtime-pulse 1.2s ease-in-out infinite;
-  background: rgba(255, 240, 240, 0.8) !important;
-}
-
-@keyframes overtime-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.4); }
-  50% { box-shadow: 0 0 16px 4px rgba(245, 108, 108, 0.3); }
-}
-
 .overtime-banner {
   display: flex;
   align-items: center;
@@ -387,7 +441,7 @@ body {
 }
 
 .table-card-endtime strong {
-  color: #409eff;
+  color: #67c23a;
 }
 
 /* 计划时长选择器 */
