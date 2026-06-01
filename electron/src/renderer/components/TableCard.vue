@@ -1,5 +1,5 @@
 <template>
-  <el-card class="table-card" :class="{ overtime: isOvertime }" shadow="hover">
+  <el-card class="table-card" :class="['status-' + table.status, { overtime: isOvertime }]" shadow="hover">
     <div class="table-card-head">
       <div>
         <div class="table-card-title">{{ table.name }}</div>
