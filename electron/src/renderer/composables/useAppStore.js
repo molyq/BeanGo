@@ -566,13 +566,47 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     state.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
 
     if (!state.areas.length) {
-      const defaults = [
-        { id: uuid(), name: '大厅', color: '#4f8df6' },
-        { id: uuid(), name: '单人间', color: '#16a085' },
-        { id: uuid(), name: '包间', color: '#e67e22' },
+      const areaDefs = [
+        { name: '墙1', color: '#5470c6', count: 4 },
+        { name: '墙2', color: '#91cc75', count: 8 },
+        { name: '墙3', color: '#fac858', count: 3 },
+        { name: '窗1', color: '#ee6666', count: 6 },
+        { name: '窗2', color: '#73c0de', count: 6 },
+        { name: '窗3', color: '#3ba272', count: 6 },
+        { name: '窗4', color: '#fc8452', count: 6 },
       ];
-      state.areas.push(...defaults);
-      await db.putBatch('areas', defaults);
+      const SEQ = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+
+      const newAreas = [];
+      const newTables = [];
+      for (const def of areaDefs) {
+        const area = { id: uuid(), name: def.name, color: def.color };
+        newAreas.push(area);
+        const prefix = String.fromCharCode(65 + newAreas.length - 1);
+        for (let i = 0; i < def.count; i++) {
+          newTables.push({
+            id: uuid(),
+            name: `${def.name}-${SEQ[i]}`,
+            codePrefix: prefix,
+            number: i + 1,
+            tag: '',
+            areaId: area.id,
+            status: 'idle',
+            sessionId: null,
+            timerStart: null,
+            timerPausedTime: 0,
+            totalPausedDuration: 0,
+            scheduledDuration: null,
+            selectingAt: null,
+            remark: '',
+            createdAt: Date.now(),
+          });
+        }
+      }
+      state.areas.push(...newAreas);
+      state.tables.push(...newTables);
+      await db.putBatch('areas', newAreas);
+      await db.putBatch('tables', newTables);
     }
 
     const fallbackPrefixByArea = Object.create(null);
