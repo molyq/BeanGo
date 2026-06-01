@@ -197,7 +197,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     }
 
     table.codePrefix = normalizePrefix(table.codePrefix || parsed?.codePrefix || fallbackPrefix);
-    table.name = `${table.codePrefix}-${table.number}`;
+    table.name = parsed ? `${table.codePrefix}-${table.number}` : (table.name || `${table.codePrefix}-${table.number}`);
 
     if (table.timerPausedTime == null) table.timerPausedTime = 0;
     if (table.totalPausedDuration == null) table.totalPausedDuration = 0;
