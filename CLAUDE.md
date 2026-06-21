@@ -4,41 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-拼豆管理平台 — 基于 Electron + Vue 3 的桌面应用，用于拼豆店铺的桌台计时、预约和结算管理。Windows/macOS 双平台支持。
+拼豆管理平台 — 基于 Vue 3 的桌面应用，用于拼豆店铺的桌台计时、预约和结算管理。后端使用 Go 嵌入式服务器，打包为单一 exe 分发。
 
 ## 开发命令
 
 ```bash
-cd electron
-npm install              # 安装依赖
-npm run dev              # 开发运行（Vite dev server + Electron 并行启动）
-npm run build:renderer   # 仅构建渲染器
-npm start                # 构建后用 Electron 启动（生产模式预览）
-npm run dist             # 打包 Windows + macOS
+cd web
+npm install              # 安装前端依赖
+npm run dev              # 开发运行（Vite dev server，含 API 中间件）
+npm run build:renderer   # 构建前端到 dist/renderer/
+build.bat                # 构建前端 + Go 服务器，输出单一 exe
+```
+
+Go 后端：
+```bash
+cd web
+go build -ldflags="-s -w" -o ../jgdz-server.exe .   # 构建（需先 npm run build:renderer）
+../jgdz-server.exe                                    # 运行（自动打开浏览器）
 ```
 
 ## 技术栈
 
-- **Electron 33** + **electron-builder 25**
+- **Go 1.23** 后端服务器（嵌入式静态资源，单一 exe 分发）
 - **Vue 3.5** (Composition API, SFC) + **Element Plus 2.13**
-- **Vite 8** (渲染器打包，开发热更新)
+- **Vite 8**（渲染器打包，开发热更新，开发时 API 中间件）
 - **无 TypeScript**，全部使用原生 JS
-- 数据持久化：主进程内存缓存 + JSON 文件（120ms 防抖异步写入）
+- 数据持久化：JSON 文件（原子写入：先写 .tmp 再 rename）
 
 ## 架构分层
 
-### 主进程 (`src/main.js`)
-- 窗口管理（单窗口，900×600 最小尺寸）
-- 系统托盘（点击切换显示/隐藏）
-- 应用菜单（文件导入/导出、打开数据目录）
-- IPC 处理器：`db:getAll`, `db:put`, `db:del`, `db:putBatch`, `db:putFull`
-- 数据存储：启动时从 `{userData}/data/db.json` 加载到 `dbCache`，写入通过 `dbSave()`（120ms 去抖），退出时同步刷盘
-- 开发模式下加载 `VITE_DEV_SERVER_URL`，生产模式加载 `dist/renderer/index.html`
+### 后端 (`main.go`)
+- 监听 127.0.0.1:22700，启动时自动打开浏览器
+- 嵌入 `dist/renderer/` 全部静态资源，SPA 回退
+- RESTful API：`GET /api/db`、`POST /api/db/:ns`、`POST /api/db/:ns/batch`、`DELETE /api/db/:ns/:id`
+- 数据存储在可执行文件同级 `data/db.json`（可通过 `-data` 参数指定）
+- 写入采用原子操作（写 .tmp 后 rename），保证数据安全
+- 优雅关闭（SIGINT/SIGTERM）
 
-### 预加载 (`src/preload.js`)
-- 通过 `contextBridge.exposeInMainWorld` 暴露 `window.electronAPI`
-- 封装所有 IPC 调用（`dbGetAll`, `dbPut`, `dbDel`, `dbPutFull`, `dbPutBatch`）
-- 暴露 `onDataImported` / `onShowToast` 事件监听
+### 开发服务器 (Vite `apiPlugin`)
+- 开发模式下 Vite 中间件处理 `/api/db` 请求
+- 读写项目根目录 `../data/db.json`
+- 与 Go 后端的 API 完全一致
 
 ### 渲染进程 (`src/renderer/`)
 
@@ -80,4 +86,5 @@ npm run dist             # 打包 Windows + macOS
 
 ## 数据存储路径
 
-- 项目根目录下的 `data/db.json`（已加入 .gitignore）
+- 开发模式：项目根目录下的 `data/db.json`
+- 生产模式：exe 同级的 `data/db.json`

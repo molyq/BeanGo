@@ -74,7 +74,9 @@
                   :table="table"
                   :status-meta="STATUS_META"
                   :get-duration="getDuration"
+                  :get-selecting-duration="getSelectingDuration"
                   :format-time="formatTime"
+                  :format-duration="formatDuration"
                   :format-start-time="formatStartTime"
                   :is-overtime="isTableOvertime"
                   :get-end-time="getEndTime"
@@ -137,6 +139,14 @@
 
     <el-dialog v-model="editActiveDialog.visible" title="编辑桌台" width="420px">
       <el-form label-width="100px">
+        <el-form-item v-if="editActiveDialog.canEditStartTime" label="开始时间">
+          <el-time-picker
+            v-model="editActiveDialog.startTime"
+            format="HH:mm"
+            value-format="HH:mm"
+            placeholder="选择开始时间"
+          />
+        </el-form-item>
         <el-form-item label="计划时长">
           <div class="custom-duration">
             <el-input-number v-model="editActiveDialog.customHours" :min="0" :max="99" size="small" />
@@ -385,6 +395,7 @@ const {
   timingHistories,
   reserveHistories,
   getDuration,
+  getSelectingDuration,
   formatDuration,
   formatTime,
   formatStartTime,
@@ -416,7 +427,7 @@ const endDialog = reactive({ visible: false, tableId: '' });
 const historyDialog = reactive({ visible: false });
 const editTableDialog = reactive({ visible: false, table: null });
 const deleteDialog = reactive({ visible: false, selectedIds: [] });
-const editActiveDialog = reactive({ visible: false, tableId: '', customHours: 0, customMinutes: 0, remark: '' });
+const editActiveDialog = reactive({ visible: false, tableId: '', customHours: 0, customMinutes: 0, remark: '', startTime: null, canEditStartTime: false });
 
 const changeTargets = computed(() => state.tables.filter((x) => x.id !== changeDialog.fromId));
 const currentTableName = computed(() => {
@@ -586,13 +597,29 @@ function onEditActive(table) {
   editActiveDialog.customHours = Math.floor(ms / 3600000);
   editActiveDialog.customMinutes = (ms / 60000) % 60;
   editActiveDialog.remark = table.remark || '';
+  editActiveDialog.canEditStartTime = table.status === 'in_use' || table.status === 'paused';
+  if (table.timerStart) {
+    const d = new Date(table.timerStart);
+    editActiveDialog.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } else {
+    editActiveDialog.startTime = null;
+  }
 }
 
 function confirmEditActive() {
   const total = editActiveDialog.customHours * 60 + editActiveDialog.customMinutes;
+  let newTimerStart;
+  if (editActiveDialog.canEditStartTime && editActiveDialog.startTime) {
+    const table = state.tables.find((x) => x.id === editActiveDialog.tableId);
+    const base = table && table.timerStart ? new Date(table.timerStart) : new Date();
+    const [h, m] = editActiveDialog.startTime.split(':').map(Number);
+    base.setHours(h, m, 0, 0);
+    newTimerStart = base.getTime();
+  }
   editActiveTable(editActiveDialog.tableId, {
     scheduledDuration: total > 0 ? total * 60 * 1000 : null,
     remark: editActiveDialog.remark,
+    timerStart: newTimerStart,
   });
   editActiveDialog.visible = false;
 }

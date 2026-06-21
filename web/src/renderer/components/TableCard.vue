@@ -20,13 +20,35 @@
 
     <div class="table-card-time-info">
       <div class="table-card-time-col">
-        <span class="table-card-time-label">已用时长</span>
-        <div class="table-card-timer">{{ running ? formatTime(getDuration(table)) : '--:--' }}</div>
+        <span class="table-card-time-label">{{ isSelecting ? '选豆计时' : '已用时长' }}</span>
+        <div class="table-card-timer">
+          <template v-if="isSelecting">{{ formatTime(getSelectingDuration(table)) }}</template>
+          <template v-else-if="running">{{ formatTime(getDuration(table)) }}</template>
+          <template v-else>--:--</template>
+        </div>
       </div>
       <div class="table-card-time-col right">
-        <span class="table-card-time-label">开始时间</span>
-        <div class="table-card-start">{{ running ? formatStartTime(table.timerStart) : '--:--' }}</div>
+        <span class="table-card-time-label">{{ isSelecting ? '选豆开始' : '开始时间' }}</span>
+        <div class="table-card-start">
+          <template v-if="isSelecting">{{ formatStartTime(table.selectingAt) }}</template>
+          <template v-else-if="running">{{ formatStartTime(table.timerStart) }}</template>
+          <template v-else>--:--</template>
+        </div>
       </div>
+    </div>
+
+    <div v-if="table.selectingDuration" class="table-card-selecttime">
+      <span>选豆用时</span>
+      <strong>{{ formatTime(table.selectingDuration) }}</strong>
+    </div>
+
+    <div v-if="table.packageEndTime != null" class="table-card-packagerow">
+      <span>套餐时长</span>
+      <strong>{{ table.packageDuration ? formatDuration(table.packageDuration) : '--' }}</strong>
+    </div>
+    <div v-if="table.packageEndTime != null" class="table-card-packagerow">
+      <span>套餐结束</span>
+      <strong>{{ table.packageEndTime ? formatStartTime(table.packageEndTime) : '--:--' }}</strong>
     </div>
 
     <div v-if="getEndTime(table)" class="table-card-endtime">
@@ -85,7 +107,7 @@
 
       <!-- 选豆中状态：开始计时占第一行，暂停计时和更换桌台在第二行 -->
       <template v-else-if="table.status === 'selecting'">
-        <el-button type="primary" class="action-row-full" @click="emit('start', table)">开始计时</el-button>
+        <el-button type="primary" class="action-row-full" @click="emit('start', table)">立即计时</el-button>
         <div class="action-row-split">
           <el-button type="warning" @click="emit('pause', table)">暂停计时</el-button>
           <el-button @click="emit('change', table)">更换桌台</el-button>
@@ -123,7 +145,9 @@ const props = defineProps({
   table: { type: Object, required: true },
   statusMeta: { type: Object, required: true },
   getDuration: { type: Function, required: true },
+  getSelectingDuration: { type: Function, required: true },
   formatTime: { type: Function, required: true },
+  formatDuration: { type: Function, required: true },
   formatStartTime: { type: Function, required: true },
   getEndTime: { type: Function, required: true },
   isOvertime: { type: Function, required: true },
@@ -148,5 +172,6 @@ const status = computed(() => {
   if (isTableOvertime.value) return { label: '超时!', tag: 'danger' };
   return props.statusMeta[props.table.status] || { label: props.table.status, tag: 'info' };
 });
+const isSelecting = computed(() => props.table.status === 'selecting' && props.table.selectingAt);
 const running = computed(() => props.table.status === 'in_use' || props.table.status === 'paused' || props.table.status === 'reserved');
 </script>

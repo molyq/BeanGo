@@ -1,0 +1,18 @@
+{
+  "name": "jgdz",
+  "version": "1.0.0",
+  "description": "拼豆管理平台",
+  "scripts": {
+    "dev": "vite",
+    "build:renderer": "vite build"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.0.8"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "element-plus": "^2.13.7",
+    "vue": "^3.5.32"
+  }
+}

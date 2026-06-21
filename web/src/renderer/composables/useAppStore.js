@@ -126,6 +126,11 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     return Math.max(0, now.value - table.timerStart - (table.totalPausedDuration || 0));
   }
 
+  function getSelectingDuration(table) {
+    if (!table.selectingAt) return 0;
+    return Math.max(0, now.value - table.selectingAt);
+  }
+
   function formatTime(ms) {
     const sec = Math.floor((ms || 0) / 1000);
     const h = Math.floor(sec / 3600);
@@ -184,6 +189,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     table.sessionId = null;
     table.scheduledDuration = null;
     table.selectingAt = null;
+    table.selectingDuration = null;
+    table.packageEndTime = null;
+    table.packageDuration = null;
     table.remark = '';
   }
 
@@ -203,6 +211,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     if (table.totalPausedDuration == null) table.totalPausedDuration = 0;
     if (table.scheduledDuration == null) table.scheduledDuration = null;
     if (table.selectingAt == null) table.selectingAt = null;
+    if (table.selectingDuration == null) table.selectingDuration = null;
+    if (table.packageEndTime == null) table.packageEndTime = null;
+    if (table.packageDuration == null) table.packageDuration = null;
     if (table.remark == null) table.remark = '';
     if (!table.status) table.status = 'idle';
   }
@@ -215,6 +226,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     table.totalPausedDuration = 0;
     table.scheduledDuration = durationMinutes ? durationMinutes * 60 * 1000 : null;
     table.selectingAt = Date.now();
+    table.selectingDuration = null;
     table.remark = '';
     persistTable(table);
     ElMessage.success(`「${table.name}」已开台${durationMinutes ? '，计划 ' + durationMinutes + ' 分钟' : ''}`);
@@ -226,6 +238,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     table.timerStart = Date.now();  // 预约开始计时
     table.timerPausedTime = 0;
     table.totalPausedDuration = 0;
+    table.selectingDuration = null;
     persistTable(table);
     ElMessage.success(`「${table.name}」已预约`);
   }
@@ -279,9 +292,13 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       table.timerPausedTime = 0;
       table.status = 'selecting';
       table.selectingAt = Date.now();
+      table.selectingDuration = null;
       persistTable(table);
       ElMessage.success(`「${table.name}」已开始选豆`);
     } else if (table.status === 'selecting') {
+      table.selectingDuration = table.selectingAt ? Date.now() - table.selectingAt : 0;
+      table.packageDuration = table.scheduledDuration;
+      table.packageEndTime = table.scheduledDuration ? Date.now() + table.scheduledDuration : 0;
       table.status = 'in_use';
       table.selectingAt = null;
       if (!table.timerStart) {
@@ -293,7 +310,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       if (opts?.auto) {
         ElMessage.success(`「${table.name}」选豆时间超过${state.settings.autoStartDelay}分钟，已自动开始计时`);
       } else {
-        ElMessage.success(`「${table.name}」开始计时`);
+        ElMessage.success(`「${table.name}」立即计时`);
       }
     }
   }
@@ -397,6 +414,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     const tempTotalPausedDuration = from.totalPausedDuration;
     const tempScheduledDuration = from.scheduledDuration;
     const tempSelectingAt = from.selectingAt;
+    const tempSelectingDuration = from.selectingDuration;
+    const tempPackageEndTime = from.packageEndTime;
+    const tempPackageDuration = from.packageDuration;
     const tempRemark = from.remark;
 
     from.status = to.status;
@@ -406,6 +426,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     from.totalPausedDuration = to.totalPausedDuration;
     from.scheduledDuration = to.scheduledDuration;
     from.selectingAt = to.selectingAt;
+    from.selectingDuration = to.selectingDuration;
+    from.packageEndTime = to.packageEndTime;
+    from.packageDuration = to.packageDuration;
     from.remark = to.remark;
 
     to.status = tempStatus;
@@ -415,6 +438,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     to.totalPausedDuration = tempTotalPausedDuration;
     to.scheduledDuration = tempScheduledDuration;
     to.selectingAt = tempSelectingAt;
+    to.selectingDuration = tempSelectingDuration;
+    to.packageEndTime = tempPackageEndTime;
+    to.packageDuration = tempPackageDuration;
     to.remark = tempRemark;
 
     persistTable(from);
@@ -451,11 +477,23 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     return true;
   }
 
-  function editActiveTable(id, { scheduledDuration, remark }) {
+  function editActiveTable(id, { scheduledDuration, remark, timerStart }) {
     const table = state.tables.find((x) => x.id === id);
     if (!table) return false;
-    if (scheduledDuration != null) table.scheduledDuration = scheduledDuration;
+    if (scheduledDuration != null && table.scheduledDuration !== scheduledDuration) {
+      if (table.packageEndTime == null) {
+        const currentEnd = getEndTime(table);
+        table.packageEndTime = currentEnd || 0;
+      }
+      table.scheduledDuration = scheduledDuration;
+    }
     if (remark != null) table.remark = remark;
+    if (timerStart !== undefined && timerStart != null) {
+      if (table.packageEndTime && table.timerStart) {
+        table.packageEndTime += timerStart - table.timerStart;
+      }
+      table.timerStart = timerStart;
+    }
     if (table.scheduledDuration && isTableOvertime(table) && overtimeNotified.has(table.id)) {
       overtimeNotified.delete(table.id);
     }
@@ -484,6 +522,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
         totalPausedDuration: 0,
         scheduledDuration: null,
         selectingAt: null,
+        selectingDuration: null,
+        packageEndTime: null,
+        packageDuration: null,
         remark: '',
         createdAt: Date.now(),
       });
@@ -598,6 +639,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
             totalPausedDuration: 0,
             scheduledDuration: null,
             selectingAt: null,
+            selectingDuration: null,
+            packageEndTime: null,
+            packageDuration: null,
             remark: '',
             createdAt: Date.now(),
           });
@@ -625,22 +669,6 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     }
 
     state.loading = false;
-  }
-
-  function bindExternalEvents() {
-    window.electronAPI.onDataImported((data) => {
-      db.replaceAll(data);
-      state.areas = data.areas || [];
-      state.tables = data.tables || [];
-      state.records = data.records || [];
-      state.histories = data.histories || [];
-      state.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
-      ElMessage.success('数据已导入');
-    });
-
-    window.electronAPI.onShowToast((msg) => {
-      ElMessage.info(msg);
-    });
   }
 
   const overtimeNotified = new Set();
@@ -682,7 +710,6 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     }, 1000);
 
     await init();
-    bindExternalEvents();
   });
 
   onUnmounted(() => {
@@ -702,6 +729,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     timingHistories,
     reserveHistories,
     getDuration,
+    getSelectingDuration,
     formatTime,
     formatDuration,
     formatStartTime,

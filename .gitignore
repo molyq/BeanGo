@@ -1,12 +1,12 @@
 # Dependencies
-electron/node_modules/
+web/node_modules/
 
 # Data directory
 /data/
 
 # Build outputs
-electron/dist/
-electron/release/
+web/dist/
+web/release/
 
 # Environment files
 .env
@@ -34,10 +34,6 @@ Thumbs.db
 
 # Vite cache
 .vite/
-
-# electron-builder extra files
-*.asar
-*.asar.unpacked
 
 # TypeScript cache (if added later)
 *.tsbuildinfo

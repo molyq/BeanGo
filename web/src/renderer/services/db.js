@@ -10,6 +10,14 @@ const DEFAULT_DATA = {
 
 const cache = clone(DEFAULT_DATA);
 
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  return res.json();
+}
+
 function replaceAll(data) {
   cache.areas = data?.areas || [];
   cache.tables = data?.tables || [];
@@ -19,7 +27,7 @@ function replaceAll(data) {
 }
 
 async function loadAll() {
-  const data = await window.electronAPI.dbGetAll();
+  const data = await api('/api/db');
   replaceAll(data || DEFAULT_DATA);
   return clone(cache);
 }
@@ -34,8 +42,7 @@ function put(namespace, payload) {
     else arr.push(clone(payload));
     cache[namespace] = arr;
   }
-
-  return window.electronAPI.dbPut(namespace, clone(payload));
+  return api(`/api/db/${namespace}`, { method: 'POST', body: JSON.stringify(clone(payload)) });
 }
 
 function putBatch(namespace, payloads) {
@@ -46,8 +53,7 @@ function putBatch(namespace, payloads) {
     else arr.push(clone(payload));
   }
   cache[namespace] = arr;
-
-  return window.electronAPI.dbPutBatch(namespace, clone(payloads));
+  return api(`/api/db/${namespace}/batch`, { method: 'POST', body: JSON.stringify(clone(payloads)) });
 }
 
 function del(namespace, id) {
@@ -56,13 +62,7 @@ function del(namespace, id) {
   } else {
     cache[namespace] = (cache[namespace] || []).filter((x) => x.id !== id);
   }
-  return window.electronAPI.dbDel(namespace, id);
+  return api(`/api/db/${namespace}/${id}`, { method: 'DELETE' });
 }
 
-export const db = {
-  loadAll,
-  put,
-  putBatch,
-  del,
-  replaceAll,
-};
+export const db = { loadAll, put, putBatch, del, replaceAll };
