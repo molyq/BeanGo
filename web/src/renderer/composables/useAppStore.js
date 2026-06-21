@@ -215,6 +215,8 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     if (table.packageEndTime == null) table.packageEndTime = null;
     if (table.packageDuration == null) table.packageDuration = null;
     if (table.remark == null) table.remark = '';
+    if (table.x == null) table.x = null;
+    if (table.y == null) table.y = null;
     if (!table.status) table.status = 'idle';
   }
 
@@ -472,6 +474,8 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     }
     if (updates.areaId != null) table.areaId = updates.areaId;
     if (updates.tag != null) table.tag = updates.tag;
+    if (updates.x != null) table.x = updates.x;
+    if (updates.y != null) table.y = updates.y;
 
     persistTable(table);
     return true;
@@ -502,7 +506,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     return true;
   }
 
-  function addTables({ areaId, startNum, count, tag, prefix }) {
+  function addTables({ areaId, startNum, count, tag, prefix, x, y }) {
     const finalPrefix = normalizePrefix(prefix);
     const newTables = [];
 
@@ -526,6 +530,8 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
         packageEndTime: null,
         packageDuration: null,
         remark: '',
+        x: x != null ? x : null,
+        y: y != null ? y : null,
         createdAt: Date.now(),
       });
     }
@@ -539,13 +545,69 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     ElMessage.success(`已新增 ${newTables.length} 个桌台`);
   }
 
-  function addArea({ name, color }) {
+  function addTableAtPosition({ x, y, areaId, tag, prefix, number }) {
+    const finalPrefix = normalizePrefix(prefix);
+    const table = {
+      id: uuid(),
+      name: `${finalPrefix}-${number}`,
+      codePrefix: finalPrefix,
+      number,
+      tag: (tag || '').trim(),
+      areaId: areaId || '',
+      status: 'idle',
+      sessionId: null,
+      timerStart: null,
+      timerPausedTime: 0,
+      totalPausedDuration: 0,
+      scheduledDuration: null,
+      selectingAt: null,
+      selectingDuration: null,
+      packageEndTime: null,
+      packageDuration: null,
+      remark: '',
+      x,
+      y,
+      createdAt: Date.now(),
+    };
+    state.tables.push(table);
+    db.put('tables', table).catch((error) => {
+      console.error('[add table at position error]', error);
+      ElMessage.error('新增桌台失败');
+    });
+    ElMessage.success(`已在(${x},${y})新增桌台「${table.name}」`);
+    return table;
+  }
+
+  function getAreaAtPosition(x, y) {
+    for (const area of state.areas) {
+      if (
+        area.x1 != null && area.y1 != null &&
+        area.x2 != null && area.y2 != null &&
+        x >= area.x1 && x <= area.x2 &&
+        y >= area.y1 && y <= area.y2
+      ) {
+        return area;
+      }
+    }
+    return null;
+  }
+
+  function updateTablePosition(tableId, x, y) {
+    const table = state.tables.find((t) => t.id === tableId);
+    if (!table) return false;
+    table.x = x;
+    table.y = y;
+    persistTable(table);
+    return true;
+  }
+
+  function addArea({ name, color, x1, y1, x2, y2 }) {
     if (state.areas.some((x) => x.name === name)) {
       ElMessage.warning('区域名已存在');
       return false;
     }
 
-    const area = { id: uuid(), name, color };
+    const area = { id: uuid(), name, color, x1: x1 ?? null, y1: y1 ?? null, x2: x2 ?? null, y2: y2 ?? null };
     state.areas.push(area);
     db.put('areas', area).catch((error) => {
       console.error('[add area error]', error);
@@ -621,7 +683,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       const newAreas = [];
       const newTables = [];
       for (const def of areaDefs) {
-        const area = { id: uuid(), name: def.name, color: def.color };
+        const area = { id: uuid(), name: def.name, color: def.color, x1: null, y1: null, x2: null, y2: null };
         newAreas.push(area);
         const prefix = String.fromCharCode(65 + newAreas.length - 1);
         for (let i = 0; i < def.count; i++) {
@@ -643,6 +705,8 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
             packageEndTime: null,
             packageDuration: null,
             remark: '',
+            x: null,
+            y: null,
             createdAt: Date.now(),
           });
         }
@@ -750,6 +814,9 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     editTable,
     editActiveTable,
     addTables,
+    addTableAtPosition,
+    getAreaAtPosition,
+    updateTablePosition,
     addArea,
     deleteArea,
     saveSettings,

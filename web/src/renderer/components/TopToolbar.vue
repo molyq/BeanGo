@@ -9,6 +9,7 @@
     />
 
     <div class="toolbar-actions">
+      <el-button @click="emit('open-visual')">可视化</el-button>
       <el-button @click="emit('open-history')">历史记录</el-button>
       <el-button @click="emit('open-areas')">区域管理</el-button>
       <el-button @click="emit('open-settings')">设置</el-button>
@@ -26,6 +27,7 @@ defineProps({
 
 const emit = defineEmits([
   'update:search',
+  'open-visual',
   'open-history',
   'open-areas',
   'open-settings',

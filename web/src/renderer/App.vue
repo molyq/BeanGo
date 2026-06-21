@@ -2,6 +2,7 @@
   <div class="page">
     <TopToolbar
       v-model:search="state.filters.search"
+      @open-visual="visualVisible = true"
       @open-history="historyDialog.visible = true"
       @open-areas="areaDialog.visible = true"
       @open-settings="openSettings"
@@ -116,6 +117,14 @@
         <el-form-item label="标签">
           <el-input v-model="addDialog.tag" placeholder="可选" />
         </el-form-item>
+        <el-form-item label="坐标X">
+          <el-input-number v-model="addDialog.x" :min="0" :max="11" size="small" style="width: 120px" />
+          <span style="margin-left: 6px; color: var(--muted); font-size: 11px;">可视化位置（可选，0-11）</span>
+        </el-form-item>
+        <el-form-item label="坐标Y">
+          <el-input-number v-model="addDialog.y" :min="0" :max="4" size="small" style="width: 120px" />
+          <span style="margin-left: 6px; color: var(--muted); font-size: 11px;">可视化位置（可选，0-4）</span>
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -166,7 +175,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="areaDialog.visible" title="区域管理" width="560px">
+    <el-dialog v-model="areaDialog.visible" title="区域管理" width="620px">
       <el-form inline>
         <el-form-item label="区域名">
           <el-input v-model="areaDialog.name" placeholder="例如：大厅" />
@@ -178,6 +187,21 @@
           <el-button type="primary" @click="confirmAddArea">新增区域</el-button>
         </el-form-item>
       </el-form>
+      <el-form inline style="margin-top: 8px;">
+        <el-form-item label="左上X">
+          <el-input-number v-model="areaDialog.x1" :min="0" :max="11" size="small" style="width: 80px" />
+        </el-form-item>
+        <el-form-item label="左上Y">
+          <el-input-number v-model="areaDialog.y1" :min="0" :max="4" size="small" style="width: 80px" />
+        </el-form-item>
+        <el-form-item label="右下X">
+          <el-input-number v-model="areaDialog.x2" :min="0" :max="11" size="small" style="width: 80px" />
+        </el-form-item>
+        <el-form-item label="右下Y">
+          <el-input-number v-model="areaDialog.y2" :min="0" :max="4" size="small" style="width: 80px" />
+        </el-form-item>
+        <span style="color: var(--muted); font-size: 11px;">坐标可选，用于可视化界面划分区域范围</span>
+      </el-form>
 
       <div v-if="!state.areas.length" class="empty small-empty">暂无区域</div>
       <div v-else class="area-list">
@@ -185,10 +209,13 @@
           <div class="area-row-left">
             <el-tag :color="area.color" effect="dark" style="border: none">{{ area.name }}</el-tag>
             <span>{{ areaCounts[area.id] || 0 }} 桌</span>
+            <span v-if="area.x1 != null" style="color: var(--muted); font-size: 11px;">
+              ({{ area.x1 }},{{ area.y1 }})-({{ area.x2 }},{{ area.y2 }})
+            </span>
           </div>
           <el-button type="danger" plain @click="confirmDeleteArea(area)">删除</el-button>
+        </div>
       </div>
-    </div>
     </el-dialog>
 
     <el-dialog v-model="changeDialog.visible" title="更换桌台" width="480px">
@@ -340,6 +367,31 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="visualVisible" title="可视化管理" width="620px" top="3vh" destroy-on-close>
+      <VisualManagement
+        :areas="state.areas"
+        :tables="state.tables"
+        :status-meta="STATUS_META"
+        :get-duration="getDuration"
+        :get-selecting-duration="getSelectingDuration"
+        :format-time="formatTime"
+        :format-duration="formatDuration"
+        :format-start-time="formatStartTime"
+        :get-end-time="getEndTime"
+        :is-table-overtime="isTableOvertime"
+        @open="(table, mins) => openTable(table, mins)"
+        @reserve="reserveTable"
+        @cancel-reserve="cancelReserve"
+        @start="startTable"
+        @pause="pauseTable"
+        @resume="resumeTable"
+        @end="onEndTiming"
+        @change="onChange"
+        @edit="onEditActive"
+        @create-table="onVisualCreateTable"
+      />
+    </el-dialog>
+
     <el-dialog v-model="editTableDialog.visible" title="编辑桌台" width="520px">
       <el-table :data="state.tables" max-height="380" @row-click="onSelectEditTable" row-class-name="clickable-row">
         <el-table-column prop="name" label="桌台" min-width="120">
@@ -365,6 +417,12 @@
         <el-form-item label="标签">
           <el-input v-model="editTableDialog.table.tag" placeholder="例如：靠窗、包厢" />
         </el-form-item>
+        <el-form-item label="坐标X">
+          <el-input-number v-model="editTableDialog.table.x" :min="0" :max="11" size="small" style="width: 120px" />
+        </el-form-item>
+        <el-form-item label="坐标Y">
+          <el-input-number v-model="editTableDialog.table.y" :min="0" :max="4" size="small" style="width: 120px" />
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -376,11 +434,12 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import TopToolbar from './components/TopToolbar.vue';
 import StatusSidebar from './components/StatusSidebar.vue';
 import TableCard from './components/TableCard.vue';
+import VisualManagement from './components/VisualManagement.vue';
 import { useAppStore } from './composables/useAppStore';
 
 const {
@@ -414,20 +473,22 @@ const {
   editTable,
   editActiveTable,
   addTables,
+  addTableAtPosition,
   addArea,
   deleteArea,
   saveSettings,
 } = useAppStore();
 
-const addDialog = reactive({ visible: false, areaId: '', prefix: 'A', startNum: 1, count: 1, tag: '' });
+const addDialog = reactive({ visible: false, areaId: '', prefix: 'A', startNum: 1, count: 1, tag: '', x: null, y: null });
 const settingsDialog = reactive({ visible: false, autoStartDelay: 0 });
-const areaDialog = reactive({ visible: false, name: '', color: '#4f8df6' });
+const areaDialog = reactive({ visible: false, name: '', color: '#4f8df6', x1: null, y1: null, x2: null, y2: null });
 const changeDialog = reactive({ visible: false, fromId: '', targetId: '' });
 const endDialog = reactive({ visible: false, tableId: '' });
 const historyDialog = reactive({ visible: false });
 const editTableDialog = reactive({ visible: false, table: null });
 const deleteDialog = reactive({ visible: false, selectedIds: [] });
 const editActiveDialog = reactive({ visible: false, tableId: '', customHours: 0, customMinutes: 0, remark: '', startTime: null, canEditStartTime: false });
+const visualVisible = ref(false);
 
 const changeTargets = computed(() => state.tables.filter((x) => x.id !== changeDialog.fromId));
 const currentTableName = computed(() => {
@@ -528,6 +589,8 @@ function confirmAdd() {
     startNum: Number(addDialog.startNum) || 1,
     count: Math.max(1, Number(addDialog.count) || 1),
     tag: addDialog.tag || '',
+    x: addDialog.x,
+    y: addDialog.y,
   });
 
   addDialog.visible = false;
@@ -553,8 +616,21 @@ function confirmAddArea() {
     return;
   }
 
-  const ok = addArea({ name, color: areaDialog.color || '#4f8df6' });
-  if (ok) areaDialog.name = '';
+  const ok = addArea({
+    name,
+    color: areaDialog.color || '#4f8df6',
+    x1: areaDialog.x1,
+    y1: areaDialog.y1,
+    x2: areaDialog.x2,
+    y2: areaDialog.y2,
+  });
+  if (ok) {
+    areaDialog.name = '';
+    areaDialog.x1 = null;
+    areaDialog.y1 = null;
+    areaDialog.x2 = null;
+    areaDialog.y2 = null;
+  }
 }
 
 function onChange(table) {
@@ -579,13 +655,15 @@ function onSelectEditTable(row) {
     name: row.name,
     areaId: row.areaId,
     tag: row.tag,
+    x: row.x,
+    y: row.y,
   };
 }
 
 function confirmEditTable() {
   if (!editTableDialog.table) return;
-  const { id, name, areaId, tag } = editTableDialog.table;
-  editTable(id, { name, areaId, tag });
+  const { id, name, areaId, tag, x, y } = editTableDialog.table;
+  editTable(id, { name, areaId, tag, x, y });
   editTableDialog.visible = false;
   editTableDialog.table = null;
 }
@@ -702,6 +780,10 @@ async function confirmDeleteArea(area) {
   }).then(() => true).catch(() => false);
 
   if (ok) deleteArea(area.id);
+}
+
+function onVisualCreateTable({ x, y, areaId, prefix, number, tag }) {
+  addTableAtPosition({ x, y, areaId, prefix, number, tag });
 }
 
 </script>
