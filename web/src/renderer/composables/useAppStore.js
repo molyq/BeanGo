@@ -617,6 +617,49 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     return true;
   }
 
+  function updateArea(id, { name, color, x1, y1, x2, y2 }) {
+    const area = state.areas.find((a) => a.id === id);
+    if (!area) return false;
+
+    if (state.areas.some((x) => x.id !== id && x.name === name)) {
+      ElMessage.warning('区域名已存在');
+      return false;
+    }
+
+    area.name = name;
+    area.color = color || '#4f8df6';
+    area.x1 = x1 ?? null;
+    area.y1 = y1 ?? null;
+    area.x2 = x2 ?? null;
+    area.y2 = y2 ?? null;
+
+    db.put('areas', area).catch((error) => {
+      console.error('[update area error]', error);
+      ElMessage.error('区域更新失败');
+    });
+
+    // Reassign tables within bounds to this area, unassign those outside
+    const affected = [];
+    const hasBounds = x1 != null && y1 != null && x2 != null && y2 != null;
+    for (const table of state.tables) {
+      if (hasBounds && table.x != null && table.y != null
+        && table.x >= x1 && table.x <= x2 && table.y >= y1 && table.y <= y2) {
+        if (table.areaId !== id) { table.areaId = id; affected.push(table); }
+      } else if (table.areaId === id) {
+        table.areaId = '';
+        affected.push(table);
+      }
+    }
+
+    if (affected.length) {
+      db.putBatch('tables', affected).catch((error) => {
+        console.error('[reassign tables error]', error);
+      });
+    }
+
+    return true;
+  }
+
   function deleteArea(id) {
     state.areas = state.areas.filter((x) => x.id !== id);
     db.del('areas', id).catch((error) => {
@@ -818,6 +861,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     getAreaAtPosition,
     updateTablePosition,
     addArea,
+    updateArea,
     deleteArea,
     saveSettings,
     clearRecords,

@@ -184,7 +184,8 @@
           <el-color-picker v-model="areaDialog.color" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="confirmAddArea">新增区域</el-button>
+          <el-button type="primary" @click="confirmAddArea">{{ areaDialog.editingId ? '保存修改' : '新增区域' }}</el-button>
+          <el-button v-if="areaDialog.editingId" @click="cancelEditArea">取消编辑</el-button>
         </el-form-item>
       </el-form>
       <div style="margin-top: 8px;">
@@ -217,7 +218,10 @@
               ({{ area.x1 }},{{ area.y1 }})-({{ area.x2 }},{{ area.y2 }})
             </span>
           </div>
-          <el-button type="danger" plain @click="confirmDeleteArea(area)">删除</el-button>
+          <div class="area-row-actions">
+            <el-button type="primary" plain @click="startEditArea(area)">编辑</el-button>
+            <el-button type="danger" plain @click="confirmDeleteArea(area)">删除</el-button>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -479,13 +483,14 @@ const {
   addTables,
   addTableAtPosition,
   addArea,
+  updateArea,
   deleteArea,
   saveSettings,
 } = useAppStore();
 
 const addDialog = reactive({ visible: false, areaId: '', prefix: 'A', startNum: 1, count: 1, tag: '', x: null, y: null });
 const settingsDialog = reactive({ visible: false, autoStartDelay: 0 });
-const areaDialog = reactive({ visible: false, name: '', color: '#4f8df6', x1: null, y1: null, x2: null, y2: null });
+const areaDialog = reactive({ visible: false, editingId: '', name: '', color: '#4f8df6', x1: null, y1: null, x2: null, y2: null });
 const changeDialog = reactive({ visible: false, fromId: '', targetId: '' });
 const endDialog = reactive({ visible: false, tableId: '' });
 const historyDialog = reactive({ visible: false });
@@ -620,21 +625,49 @@ function confirmAddArea() {
     return;
   }
 
-  const ok = addArea({
+  const payload = {
     name,
     color: areaDialog.color || '#4f8df6',
     x1: areaDialog.x1,
     y1: areaDialog.y1,
     x2: areaDialog.x2,
     y2: areaDialog.y2,
-  });
-  if (ok) {
-    areaDialog.name = '';
-    areaDialog.x1 = null;
-    areaDialog.y1 = null;
-    areaDialog.x2 = null;
-    areaDialog.y2 = null;
+  };
+
+  let ok;
+  if (areaDialog.editingId) {
+    ok = updateArea(areaDialog.editingId, payload);
+  } else {
+    ok = addArea(payload);
   }
+
+  if (ok) {
+    clearAreaForm();
+  }
+}
+
+function startEditArea(area) {
+  areaDialog.editingId = area.id;
+  areaDialog.name = area.name;
+  areaDialog.color = area.color;
+  areaDialog.x1 = area.x1;
+  areaDialog.y1 = area.y1;
+  areaDialog.x2 = area.x2;
+  areaDialog.y2 = area.y2;
+}
+
+function cancelEditArea() {
+  clearAreaForm();
+}
+
+function clearAreaForm() {
+  areaDialog.editingId = '';
+  areaDialog.name = '';
+  areaDialog.color = '#4f8df6';
+  areaDialog.x1 = null;
+  areaDialog.y1 = null;
+  areaDialog.x2 = null;
+  areaDialog.y2 = null;
 }
 
 function onChange(table) {

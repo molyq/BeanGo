@@ -517,6 +517,11 @@ body {
   color: var(--muted);
 }
 
+.area-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .change-option-content {
   display: flex;
   align-items: center;
