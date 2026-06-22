@@ -2,13 +2,13 @@
   <div class="page">
     <TopToolbar
       v-model:search="state.filters.search"
-      @open-visual="visualVisible = true"
+      @open-visual="currentView = 'visual'"
       @open-history="historyDialog.visible = true"
       @open-areas="areaDialog.visible = true"
       @open-settings="openSettings"
     />
 
-    <main class="layout">
+    <main class="layout" v-if="currentView === 'list'">
       <StatusSidebar
         :status="state.filters.status"
         :tag="state.filters.tag"
@@ -55,6 +55,22 @@
             @click="state.filters.timeFilter = state.filters.timeFilter === 10 ? null : 10"
           >
             10 分钟内结束
+          </el-button>
+          <el-button
+            size="small"
+            :type="state.filters.timeFilter === 20 ? 'warning' : ''"
+            plain
+            @click="state.filters.timeFilter = state.filters.timeFilter === 20 ? null : 20"
+          >
+            20 分钟内结束
+          </el-button>
+          <el-button
+            size="small"
+            :type="state.filters.timeFilter === 30 ? 'warning' : ''"
+            plain
+            @click="state.filters.timeFilter = state.filters.timeFilter === 30 ? null : 30"
+          >
+            30 分钟内结束
           </el-button>
         </div>
 
@@ -191,18 +207,18 @@
       <div style="margin-top: 8px;">
         <el-form inline>
           <el-form-item label="左上角X">
-            <el-input-number v-model="areaDialog.x1" :min="0" :max="11" size="small" style="width: 80px" />
+            <el-input-number v-model="areaDialog.x1" :min="0" :max="13" size="small" style="width: 80px" />
           </el-form-item>
           <el-form-item label="左上角Y">
-            <el-input-number v-model="areaDialog.y1" :min="0" :max="4" size="small" style="width: 80px" />
+            <el-input-number v-model="areaDialog.y1" :min="0" :max="6" size="small" style="width: 80px" />
           </el-form-item>
         </el-form>
         <el-form inline>
           <el-form-item label="右下角X">
-            <el-input-number v-model="areaDialog.x2" :min="0" :max="11" size="small" style="width: 80px" />
+            <el-input-number v-model="areaDialog.x2" :min="0" :max="13" size="small" style="width: 80px" />
           </el-form-item>
           <el-form-item label="右下角Y">
-            <el-input-number v-model="areaDialog.y2" :min="0" :max="4" size="small" style="width: 80px" />
+            <el-input-number v-model="areaDialog.y2" :min="0" :max="6" size="small" style="width: 80px" />
           </el-form-item>
         </el-form>
         <span style="color: var(--muted); font-size: 11px;">坐标可选，用于可视化界面划分区域范围</span>
@@ -375,30 +391,30 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="visualVisible" title="可视化管理" width="1050px" top="2vh" destroy-on-close>
-      <VisualManagement
-        :areas="state.areas"
-        :tables="state.tables"
-        :status-meta="STATUS_META"
-        :get-duration="getDuration"
-        :get-selecting-duration="getSelectingDuration"
-        :format-time="formatTime"
-        :format-duration="formatDuration"
-        :format-start-time="formatStartTime"
-        :get-end-time="getEndTime"
-        :is-table-overtime="isTableOvertime"
-        @open="(table, mins) => openTable(table, mins)"
-        @reserve="reserveTable"
-        @cancel-reserve="cancelReserve"
-        @start="startTable"
-        @pause="pauseTable"
-        @resume="resumeTable"
-        @end="onEndTiming"
-        @change="onChange"
-        @edit="onEditActive"
-        @create-table="onVisualCreateTable"
-      />
-    </el-dialog>
+    <VisualManagement
+      v-if="currentView === 'visual'"
+      :areas="state.areas"
+      :tables="state.tables"
+      :status-meta="STATUS_META"
+      :get-duration="getDuration"
+      :get-selecting-duration="getSelectingDuration"
+      :format-time="formatTime"
+      :format-duration="formatDuration"
+      :format-start-time="formatStartTime"
+      :get-end-time="getEndTime"
+      :is-table-overtime="isTableOvertime"
+      @open="(table, mins) => openTable(table, mins)"
+      @reserve="reserveTable"
+      @cancel-reserve="cancelReserve"
+      @start="startTable"
+      @pause="pauseTable"
+      @resume="resumeTable"
+      @end="onEndTiming"
+      @change="onChange"
+      @edit="onEditActive"
+      @create-table="onVisualCreateTable"
+      @back="currentView = 'list'"
+    />
 
     <el-dialog v-model="editTableDialog.visible" title="编辑桌台" width="520px">
       <el-table :data="state.tables" max-height="380" @row-click="onSelectEditTable" row-class-name="clickable-row">
@@ -497,7 +513,7 @@ const historyDialog = reactive({ visible: false });
 const editTableDialog = reactive({ visible: false, table: null });
 const deleteDialog = reactive({ visible: false, selectedIds: [] });
 const editActiveDialog = reactive({ visible: false, tableId: '', customHours: 0, customMinutes: 0, remark: '', startTime: null, canEditStartTime: false });
-const visualVisible = ref(false);
+const currentView = ref('list');
 
 const changeTargets = computed(() => state.tables.filter((x) => x.id !== changeDialog.fromId));
 const currentTableName = computed(() => {

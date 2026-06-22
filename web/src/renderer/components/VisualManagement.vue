@@ -1,5 +1,9 @@
 <template>
   <div class="visual-wrap">
+    <div class="visual-header">
+      <el-button @click="emit('back')" text>← 返回</el-button>
+      <span class="visual-title">可视化管理</span>
+    </div>
     <div class="visual-legend">
       <span v-for="s in legendStatuses" :key="s.key" class="legend-item">
         <span class="legend-dot" :style="{ background: s.color }"></span>
@@ -7,26 +11,31 @@
       </span>
     </div>
 
-    <div class="visual-stage" :style="stageStyle">
-      <template v-for="cell in cells" :key="`${cell.x}-${cell.y}`">
-        <div
-          class="visual-cell"
-          :class="cellClass(cell)"
-          :style="cellStyle(cell)"
-          @click="handleCellClick(cell)"
-        >
-          <span v-if="cell.table" class="cell-name">{{ cell.table.name }}</span>
-          <span v-else class="cell-empty-icon">+</span>
-        </div>
-      </template>
+    <div class="stage-scroll">
+      <div class="visual-stage" :style="stageStyle">
+        <template v-for="cell in cells" :key="`${cell.x}-${cell.y}`">
+          <div
+            class="visual-cell"
+            :class="cellClass(cell)"
+            :style="cellStyle(cell)"
+            @click="handleCellClick(cell)"
+          >
+            <template v-if="cell.table">
+              <span class="cell-name">{{ cell.table.name }}</span>
+              <span v-if="cell.table.status === 'in_use' && getEndTime(cell.table)" class="cell-end-time">{{ formatStartTime(getEndTime(cell.table)) }}</span>
+            </template>
+            <span v-else class="cell-empty-icon">+</span>
+          </div>
+        </template>
 
-      <div
-        v-for="area in positionedAreas"
-        :key="area.id"
-        class="area-overlay"
-        :style="areaOverlayStyle(area)"
-      >
-        <span class="area-label" :style="{ color: area.color }">{{ area.name }}</span>
+        <div
+          v-for="area in positionedAreas"
+          :key="area.id"
+          class="area-overlay"
+          :style="areaOverlayStyle(area)"
+        >
+          <span class="area-label" :style="{ color: area.color }">{{ area.name }}</span>
+        </div>
       </div>
     </div>
 
@@ -103,27 +112,27 @@ const props = defineProps({
 
 const emit = defineEmits([
   'open', 'reserve', 'cancelReserve', 'start', 'pause', 'resume', 'end',
-  'change', 'edit', 'create-table',
+  'change', 'edit', 'create-table', 'back',
 ]);
 
-const GRID_COLS = 12;
-const GRID_ROWS = 5;
-const CELL = 68;
+const GRID_COLS = 14;
+const GRID_ROWS = 7;
+const CELL = 54;
 const GAP = 10;
-
-const STATUS_BG = {
-  idle: '#5470c6',
-  reserved: '#e6a23c',
-  selecting: '#409eff',
-  in_use: '#67c23a',
-  paused: '#e6a23c',
-  overtime: '#f56c6c',
-};
 
 const stageStyle = {
   position: 'relative',
   width: `${GRID_COLS * CELL + (GRID_COLS - 1) * GAP}px`,
   height: `${GRID_ROWS * CELL + (GRID_ROWS - 1) * GAP}px`,
+};
+
+const STATUS_BG = {
+  idle: '#67c23a',
+  reserved: '#e6a23c',
+  selecting: '#409eff',
+  in_use: '#5470c6',
+  paused: '#e6a23c',
+  overtime: '#f56c6c',
 };
 
 const legendStatuses = [
@@ -150,8 +159,10 @@ function cellStyle(cell) {
     borderRadius: '5px',
     cursor: 'pointer',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: '2px',
     boxSizing: 'border-box',
     zIndex: 1,
   };
@@ -290,9 +301,30 @@ function confirmCreate() {
 .visual-wrap {
   display: flex;
   flex-direction: column;
-  align-items: center;
   width: 100%;
+  max-width: 100%;
+  overflow: auto;
   user-select: none;
+}
+
+.visual-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.visual-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stage-scroll {
+  display: flex;
+  justify-content: center;
+  min-width: fit-content;
 }
 
 .visual-legend {
@@ -336,6 +368,16 @@ function confirmCreate() {
   font-size: 16px;
   color: #b0b8c9;
   font-weight: 300;
+}
+
+.cell-end-time {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .cell-name {
