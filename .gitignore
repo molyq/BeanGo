@@ -35,5 +35,9 @@ Thumbs.db
 # Vite cache
 .vite/
 
+# Claude Code
+.claude/
+CLAUDE.md
+
 # TypeScript cache (if added later)
 *.tsbuildinfo
