@@ -190,7 +190,7 @@ const positionedAreas = computed(() =>
 );
 
 function cellClass(cell) {
-  if (!cell.table) return 'empty';
+  if (!cell.table) return 'cell-empty';
   const st = props.isTableOvertime(cell.table) ? 'overtime' : cell.table.status;
   return `status-${st}`;
 }
@@ -324,7 +324,7 @@ function confirmCreate() {
   z-index: 2;
 }
 
-.visual-cell.empty:hover {
+.visual-cell.cell-empty:hover {
   background: #dde3ef !important;
 }
 
