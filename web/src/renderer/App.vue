@@ -187,21 +187,25 @@
           <el-button type="primary" @click="confirmAddArea">新增区域</el-button>
         </el-form-item>
       </el-form>
-      <el-form inline style="margin-top: 8px;">
-        <el-form-item label="左上X">
-          <el-input-number v-model="areaDialog.x1" :min="0" :max="11" size="small" style="width: 80px" />
-        </el-form-item>
-        <el-form-item label="左上Y">
-          <el-input-number v-model="areaDialog.y1" :min="0" :max="4" size="small" style="width: 80px" />
-        </el-form-item>
-        <el-form-item label="右下X">
-          <el-input-number v-model="areaDialog.x2" :min="0" :max="11" size="small" style="width: 80px" />
-        </el-form-item>
-        <el-form-item label="右下Y">
-          <el-input-number v-model="areaDialog.y2" :min="0" :max="4" size="small" style="width: 80px" />
-        </el-form-item>
+      <div style="margin-top: 8px;">
+        <el-form inline>
+          <el-form-item label="左上角X">
+            <el-input-number v-model="areaDialog.x1" :min="0" :max="11" size="small" style="width: 80px" />
+          </el-form-item>
+          <el-form-item label="左上角Y">
+            <el-input-number v-model="areaDialog.y1" :min="0" :max="4" size="small" style="width: 80px" />
+          </el-form-item>
+        </el-form>
+        <el-form inline>
+          <el-form-item label="右下角X">
+            <el-input-number v-model="areaDialog.x2" :min="0" :max="11" size="small" style="width: 80px" />
+          </el-form-item>
+          <el-form-item label="右下角Y">
+            <el-input-number v-model="areaDialog.y2" :min="0" :max="4" size="small" style="width: 80px" />
+          </el-form-item>
+        </el-form>
         <span style="color: var(--muted); font-size: 11px;">坐标可选，用于可视化界面划分区域范围</span>
-      </el-form>
+      </div>
 
       <div v-if="!state.areas.length" class="empty small-empty">暂无区域</div>
       <div v-else class="area-list">
@@ -367,7 +371,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="visualVisible" title="可视化管理" width="620px" top="3vh" destroy-on-close>
+    <el-dialog v-model="visualVisible" title="可视化管理" width="1050px" top="2vh" destroy-on-close>
       <VisualManagement
         :areas="state.areas"
         :tables="state.tables"

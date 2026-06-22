@@ -108,8 +108,8 @@ const emit = defineEmits([
 
 const GRID_COLS = 12;
 const GRID_ROWS = 5;
-const CELL = 40;
-const GAP = 3;
+const CELL = 68;
+const GAP = 10;
 
 const STATUS_BG = {
   idle: '#5470c6',
@@ -196,10 +196,11 @@ function cellClass(cell) {
 }
 
 function areaOverlayStyle(area) {
-  const left = area.x1 * (CELL + GAP);
-  const top = area.y1 * (CELL + GAP);
-  const width = (area.x2 - area.x1 + 1) * (CELL + GAP) - GAP;
-  const height = (area.y2 - area.y1 + 1) * (CELL + GAP) - GAP;
+  const unit = CELL + GAP;
+  const left = area.x1 * unit - GAP / 2;
+  const top = area.y1 * unit - GAP / 2;
+  const width = (area.x2 - area.x1 + 1) * unit;
+  const height = (area.y2 - area.y1 + 1) * unit;
   return {
     left: `${left}px`,
     top: `${top}px`,
@@ -287,6 +288,9 @@ function confirmCreate() {
 
 <style scoped>
 .visual-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   user-select: none;
 }
@@ -301,15 +305,15 @@ function confirmCreate() {
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 14px;
   color: #606266;
 }
 
 .legend-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
   display: inline-block;
 }
 
@@ -329,14 +333,14 @@ function confirmCreate() {
 }
 
 .cell-empty-icon {
-  font-size: 12px;
+  font-size: 16px;
   color: #b0b8c9;
   font-weight: 300;
 }
 
 .cell-name {
   color: #fff;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   overflow: hidden;
@@ -358,17 +362,18 @@ function confirmCreate() {
 /* Area overlay */
 .area-overlay {
   position: absolute;
-  border: 2px dashed;
+  border-width: 2px;
+  border-style: dashed;
   border-radius: 6px;
   pointer-events: none;
-  z-index: 0;
+  z-index: 3;
 }
 
 .area-label {
   position: absolute;
   top: -2px;
   left: 6px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   padding: 1px 6px;
   background: rgba(255, 255, 255, 0.9);
