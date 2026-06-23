@@ -39,5 +39,13 @@ Thumbs.db
 .claude/
 CLAUDE.md
 
+# Build artifacts
+*.exe
+
+# SQLite files
+*.db
+*.db-wal
+*.db-shm
+
 # TypeScript cache (if added later)
 *.tsbuildinfo

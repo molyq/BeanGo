@@ -151,7 +151,7 @@ function createMenu() {
       submenu: [
         { label: '导出数据', click: async () => {
           const result = await dialog.showSaveDialog(win, {
-            title: '导出数据', defaultPath: `jgdz-backup-${Date.now()}.json`,
+            title: '导出数据', defaultPath: `BeanGo-backup-${Date.now()}.json`,
             filters: [{ name: 'JSON', extensions: ['json'] }]
           });
           if (!result.canceled && result.filePath) {

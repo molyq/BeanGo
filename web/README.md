@@ -8,35 +8,42 @@
 - 客户预约、计划时长、超时提醒
 - 自动计时（选豆超时自动开始）
 - 区域管理、历史记录
-- 数据 JSON 文件持久化
+- SQLite 数据持久化（WAL 模式，ACID 事务）
 
 ## 开发
 
 ```bash
 cd web
 npm install
-npm run dev          # Vite dev server，监听 22700 端口，API 中间件内置
+
+# 终端 1：启动 Go API 服务器
+go run . -dev
+
+# 终端 2：启动 Vite 前端开发服务器
+npm run dev
 ```
 
-浏览器访问 `http://127.0.0.1:22700`，iPad 可访问 `http://<本机IP>:22700`。
+- Vite 开发服务器监听 22700 端口，代理 `/api` 请求到 Go 后端（22701 端口）
+- Go 后端在 dev 模式不嵌入静态资源、不打开浏览器
+- 浏览器访问 `http://127.0.0.1:22700`
 
 ## 生产构建
 
 ```bash
 cd web
 npm run build:renderer     # 构建前端到 dist/renderer/
-build.bat                  # 构建前端 + Go 服务器，输出 ../jgdz-server.exe
+go build -ldflags="-s -w" -o ../BeanGo.exe .
 ```
-
-Go 服务器会嵌入 `dist/renderer/` 静态资源，打包为单一 exe。运行后自动打开浏览器。
 
 ## 数据存储
 
-- 开发模式：项目根目录 `data/db.json`
-- 生产模式：exe 同级 `data/db.json`
+- SQLite 数据库：`data/BeanGo.db`（WAL 模式）
+- 首次启动自动从 `db.json` 迁移数据（成功后重命名为 `.bak`）
+- `BeanGo.exe --export-json` 可将 SQLite 数据导出为 `db.json`
 
 ## 技术栈
 
-- **Go 1.23** 后端（嵌入式静态资源）
+- **Go** 后端（嵌入式静态资源，SQLite 持久化）
 - **Vue 3.5** + **Element Plus 2.13**
-- **Vite 8**（开发服务器 + API 中间件）
+- **Vite 8**（开发 HMR，API 代理到 Go）
+- **modernc.org/sqlite**（纯 Go，无 CGO，单 exe 分发）
