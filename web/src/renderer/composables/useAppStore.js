@@ -288,23 +288,26 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
   }
 
   function startTable(table, opts) {
+    const actionTime = opts?.now || Date.now();
+
     if (table.status === 'reserved') {
       table.timerStart = null;
       table.totalPausedDuration = 0;
       table.timerPausedTime = 0;
       table.status = 'selecting';
-      table.selectingAt = Date.now();
+      table.selectingAt = actionTime;
       table.selectingDuration = null;
       persistTable(table);
       ElMessage.success(`「${table.name}」已开始选豆`);
     } else if (table.status === 'selecting') {
-      table.selectingDuration = table.selectingAt ? Date.now() - table.selectingAt : 0;
+      const timerStart = opts?.timerStart || actionTime;
+      table.selectingDuration = table.selectingAt ? actionTime - table.selectingAt : 0;
       table.packageDuration = table.scheduledDuration;
-      table.packageEndTime = table.scheduledDuration ? Date.now() + table.scheduledDuration : 0;
+      table.packageEndTime = table.scheduledDuration ? timerStart + table.scheduledDuration : 0;
       table.status = 'in_use';
       table.selectingAt = null;
       if (!table.timerStart) {
-        table.timerStart = Date.now();
+        table.timerStart = timerStart;
       }
       table.timerPausedTime = 0;
       table.totalPausedDuration = 0;
@@ -690,6 +693,7 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
       console.error('[save settings error]', error);
       ElMessage.error('设置保存失败');
     });
+    autoStartSelectingTables();
   }
 
   function clearRecords() {
@@ -717,9 +721,13 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     });
 
     const migrated = [];
+    const loadedAt = Date.now();
     for (const table of state.tables) {
       const before = JSON.stringify(table);
       ensureTableShape(table, fallbackPrefixByArea[table.areaId] || 'A');
+      if (table.status === 'selecting' && !table.selectingAt) {
+        table.selectingAt = loadedAt;
+      }
       if (JSON.stringify(table) !== before) migrated.push(table);
     }
     if (migrated.length) {
@@ -727,20 +735,38 @@ const reserveHistories = computed(() => sortedHistories.value.filter((h) => h.ty
     }
 
     state.loading = false;
+    autoStartSelectingTables(loadedAt);
   }
 
   const overtimeNotified = new Set();
 
+  function getAutoStartDelayMs() {
+    const minutes = Number(state.settings.autoStartDelay) || 0;
+    return minutes > 0 ? minutes * 60 * 1000 : 0;
+  }
+
+  function autoStartSelectingTables(referenceTime = Date.now()) {
+    const autoDelay = getAutoStartDelayMs();
+    if (autoDelay <= 0) return;
+
+    for (const table of state.tables) {
+      if (table.status !== 'selecting' || !table.selectingAt) continue;
+
+      const selectingAt = Number(table.selectingAt) || 0;
+      if (selectingAt <= 0) continue;
+
+      const dueAt = selectingAt + autoDelay;
+      if (referenceTime >= dueAt) {
+        startTable(table, { auto: true, now: referenceTime, timerStart: dueAt });
+      }
+    }
+  }
+
   onMounted(async () => {
     timer = setInterval(() => {
       now.value = Date.now();
-      const autoDelay = (state.settings.autoStartDelay || 0) * 60 * 1000;
+      autoStartSelectingTables(now.value);
       for (const table of state.tables) {
-        if (autoDelay > 0 && table.status === 'selecting' && table.selectingAt) {
-          if (Date.now() - table.selectingAt >= autoDelay) {
-            startTable(table, { auto: true });
-          }
-        }
         if (isTableOvertime(table) && !overtimeNotified.has(table.id)) {
           overtimeNotified.add(table.id);
           const notify = ElNotification({

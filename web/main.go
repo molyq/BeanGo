@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -59,6 +61,11 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `
 
+var (
+	errLegacyJSONNotFound = errors.New("legacy db.json not found")
+	errDatabaseHasData    = errors.New("database already has data")
+)
+
 type Database struct {
 	db *sql.DB
 }
@@ -89,32 +96,55 @@ func (d *Database) close() error {
 	return d.db.Close()
 }
 
-func (d *Database) migrateFromJSON(jsonPath string) error {
-	// Skip if SQLite already has data
+func (d *Database) hasApplicationData() (bool, error) {
 	var count int
-	if err := d.db.QueryRow("SELECT COUNT(*) FROM areas").Scan(&count); err != nil {
-		return err
+	err := d.db.QueryRow(`
+		SELECT
+			(SELECT COUNT(*) FROM areas) +
+			(SELECT COUNT(*) FROM tables) +
+			(SELECT COUNT(*) FROM records) +
+			(SELECT COUNT(*) FROM histories)
+	`).Scan(&count)
+	if err != nil {
+		return false, err
 	}
-	if count > 0 {
-		return nil
+	return count > 0, nil
+}
+
+func uniqueBackupPath(sourcePath string) string {
+	candidate := sourcePath + ".bak"
+	if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+		return candidate
+	}
+	timestamp := time.Now().Format("20060102-150405")
+	return fmt.Sprintf("%s.%s.bak", sourcePath, timestamp)
+}
+
+func (d *Database) migrateFromJSON(jsonPath string) (string, error) {
+	hasData, err := d.hasApplicationData()
+	if err != nil {
+		return "", err
+	}
+	if hasData {
+		return "", errDatabaseHasData
 	}
 
 	raw, err := os.ReadFile(jsonPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return "", errLegacyJSONNotFound
 		}
-		return fmt.Errorf("读取 db.json: %w", err)
+		return "", fmt.Errorf("读取 db.json: %w", err)
 	}
 
 	var data map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return fmt.Errorf("解析 db.json: %w", err)
+		return "", fmt.Errorf("解析 db.json: %w", err)
 	}
 
 	tx, err := d.db.Begin()
 	if err != nil {
-		return fmt.Errorf("开始事务: %w", err)
+		return "", fmt.Errorf("开始事务: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -182,12 +212,15 @@ func (d *Database) migrateFromJSON(jsonPath string) error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交迁移: %w", err)
+		return "", fmt.Errorf("提交迁移: %w", err)
 	}
 
-	os.Rename(jsonPath, jsonPath+".bak")
-	log.Printf("数据已从 %s 迁移到 SQLite，原文件重命名为 .bak", jsonPath)
-	return nil
+	backupPath := uniqueBackupPath(jsonPath)
+	if err := os.Rename(jsonPath, backupPath); err != nil {
+		return "", fmt.Errorf("备份 db.json: %w", err)
+	}
+	log.Printf("数据已从 %s 迁移到 SQLite，原文件重命名为 %s", jsonPath, backupPath)
+	return backupPath, nil
 }
 
 func toFloat64(v any, def float64) float64 {
@@ -443,15 +476,54 @@ func (d *Database) exportJSON(w io.Writer) error {
 }
 
 type Server struct {
-	db   *Database
-	port string
-	dev  bool
+	db       *Database
+	port     string
+	dev      bool
+	jsonPath string
 }
 
 func (s *Server) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	data := s.db.getAll()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
+}
+
+func (s *Server) handleMigrateJSON(w http.ResponseWriter, r *http.Request) {
+	backupPath, err := s.db.migrateFromJSON(s.jsonPath)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case errors.Is(err, errLegacyJSONNotFound):
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]any{
+				"ok":    false,
+				"error": "legacy db.json not found",
+				"path":  s.jsonPath,
+			})
+		case errors.Is(err, errDatabaseHasData):
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{
+				"ok":    false,
+				"error": "database already has data",
+			})
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]any{
+				"ok":    false,
+				"error": err.Error(),
+			})
+			log.Printf("[db] manual json migration error: %v", err)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok":         true,
+		"sourcePath": s.jsonPath,
+		"backupPath": backupPath,
+		"data":       s.db.getAll(),
+	})
 }
 
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
@@ -537,6 +609,8 @@ func (s *Server) apiHandler(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && cleanPath == "/api/db":
 		s.handleGetAll(w, r)
+	case r.Method == http.MethodPost && cleanPath == "/api/db/migrate-json":
+		s.handleMigrateJSON(w, r)
 	case r.Method == http.MethodPost && strings.Count(cleanPath, "/") == 3 && strings.HasSuffix(cleanPath, "/batch"):
 		s.handlePostBatch(w, r)
 	case r.Method == http.MethodPost && strings.Count(cleanPath, "/") == 3:
@@ -622,10 +696,6 @@ func main() {
 	}
 	defer database.close()
 
-	if err := database.migrateFromJSON(jsonPath); err != nil {
-		log.Printf("数据迁移失败: %v", err)
-	}
-
 	if *exportJSON {
 		exportPath := filepath.Join(*dataDir, "db.json")
 		f, err := os.Create(exportPath)
@@ -641,7 +711,7 @@ func main() {
 		return
 	}
 
-	s := &Server{db: database, port: *port, dev: *devMode}
+	s := &Server{db: database, port: *port, dev: *devMode, jsonPath: jsonPath}
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/db", http.HandlerFunc(s.apiHandler))
